@@ -28,8 +28,7 @@ public abstract class AutoHardware extends LinearOpMode {
 
     protected DcMotor         frontrightDrive  = null;
 
-    protected DcMotor         misumiSlide  = null;
-   // protected DcMotor         liftArm  = null;
+
 
     protected ElapsedTime     runtime = new ElapsedTime();
 

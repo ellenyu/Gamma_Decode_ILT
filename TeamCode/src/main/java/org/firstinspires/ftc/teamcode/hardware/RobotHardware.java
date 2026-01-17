@@ -25,19 +25,14 @@ public class RobotHardware {
 
     public DcMotor motorbl = null;
 
-    public DcMotor hogback = null;
-
-    public Limelight3A limelight = null;
+    public DcMotor intake = null;
 
 
-     public CRServo flyWheell = null; // tilt servo horizontal
-     public CRServo flyWheelr = null;
 
-     public Servo grabberYtilt; //tilt servo vertical (2nd stage)
-     public Servo grabberY = null;
+   //  public CRServo flyWheell = null;
+   //  public CRServo flyWheelr = null;
 
 
-    //public Servo airplaneLauncher = null;
 
     public IMU imu;
 
@@ -64,12 +59,11 @@ public class RobotHardware {
         motorfr = hwMap.get(DcMotor.class, "motorfr");
         motorbl = hwMap.get(DcMotor.class, "motorbl");
         motorbr = hwMap.get(DcMotor.class, "motorbr");
-        hogback = hwMap.get(DcMotor.class, "hogback");
-        //launcher = hwMap.get(DcMotor.class, "launcher");
+        intake = hwMap.get(DcMotor.class, "intake");
 
-        // Horizontal slide
-        flyWheell = hwMap.get(CRServo.class, "flyWheell");
-        flyWheelr = hwMap.get(CRServo.class, "flyWheelr");
+
+      //  flyWheell = hwMap.get(CRServo.class, "flyWheell");
+       // flyWheelr = hwMap.get(CRServo.class, "flyWheelr");
 
 
 
@@ -81,36 +75,17 @@ public class RobotHardware {
         motorfl.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         motorbr.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         motorbl.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        intake.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+
         motorfr.setDirection(DcMotor.Direction.REVERSE);
         motorbr.setDirection(DcMotor.Direction.REVERSE);
-      //  motorbl.setDirection(DcMotor.Direction.REVERSE);
+        intake.setDirection(DcMotor.Direction.REVERSE);
 
 
 
         //motorbr.setDirection(DcMotor.Direction.REVERSE);
 
 
-        // Define and initialize ALL installed servos.
-
-        //airplaneLauncher = hwMap.get(Servo.class, "feeder");
-        //tiltServoRight = hwMap.get(Servo.class, "tiltServoR");
-        //grabServoRight = hwMap.get(Servo.class, "grabServoR");
-        // tiltServoLeft = hwMap.get(Servo.class, "tiltServoL");
-        // grabServoLeft = hwMap.get(Servo.class, "grabServoL");
-        //autoPixel.setPosition(0.5);
-        //boardPixel.setPosition(0);
-        //grabServo.setPosition(0.4);
-
-        // Get distance sensors
-        //distanceR = hwMap.get(DistanceSensor.class, "distanceR");
-        //distanceL = hwMap.get(DistanceSensor.class, "distanceL");
-
-        // Set airplane launcher default servo position
-        //airplaneLauncher.setPosition(0);
-
-        // reverse motor directions
-        //motorbl.setDirection(DcMotor.Direction.REVERSE);
-        //motorfl.setDirection(DcMotorSimple.Direction.REVERSE);
 
         // If there are encoders connected, switch to RUN_USING_ENCODER mode for greater accuracy
         setDrivetrainMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);

@@ -80,23 +80,23 @@ public class OpMode3 extends LinearOpMode {
            */
 
 //flywheel right right joystick power on or off
-            if (gamepad2.x) {
-                robot.flyWheelr.setPower(-0.5);
-                robot.flyWheell.setPower(0.5);
-
-            } else if (gamepad2.b) {
-                robot.flyWheelr.setPower(0.0);
-                robot.flyWheell.setPower(0.0);
-            }
-
-            //hogback wheel
-           if (gamepad2.y) {
-                    robot.hogback.setPower(-0.8);
-            }
-
-            if (gamepad2.a) {
-                    robot.hogback.setPower(0.0);
-            }
+//            if (gamepad2.x) {
+//                robot.flyWheelr.setPower(-0.5);
+//                robot.flyWheell.setPower(0.5);
+//
+//            } else if (gamepad2.b) {
+//                robot.flyWheelr.setPower(0.0);
+//                robot.flyWheell.setPower(0.0);
+//            }
+//
+//            //hogback wheel
+//           if (gamepad2.y) {
+//                    robot.hogback.setPower(-0.8);
+//            }
+//
+//            if (gamepad2.a) {
+//                    robot.hogback.setPower(0.0);
+//            }
 
 
 

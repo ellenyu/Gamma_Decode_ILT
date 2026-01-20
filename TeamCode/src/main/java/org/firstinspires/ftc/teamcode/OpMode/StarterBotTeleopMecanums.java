@@ -10,6 +10,7 @@ import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.IMU;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
@@ -39,6 +40,9 @@ public class StarterBotTeleopMecanums extends OpMode {
 
     final double INTAKE_FORWARD_VELOCITY = 0.8;
     final double INTAKE_BACKWARD_VELOCITY = -0.6;
+    final double SHOOTER_TARGET_VELOCITY = 1000;
+
+
 
     boolean forward = true;
 
@@ -47,6 +51,8 @@ public class StarterBotTeleopMecanums extends OpMode {
 
     private DcMotor leftFrontDrive, rightFrontDrive, leftBackDrive, rightBackDrive;
     private DcMotor intake;
+
+    private DcMotorEx shooter;
 
     private Limelight3A limelight;
 
@@ -72,6 +78,8 @@ public class StarterBotTeleopMecanums extends OpMode {
         leftBackDrive = hardwareMap.get(DcMotor.class, "motorbl");
         rightBackDrive = hardwareMap.get(DcMotor.class, "motorbr");
         intake = hardwareMap.get(DcMotor.class, "intake");
+        shooter = hardwareMap.get(DcMotorEx.class, "shooter");
+
 
 
         leftFrontDrive.setDirection(DcMotor.Direction.FORWARD);
@@ -145,6 +153,8 @@ public class StarterBotTeleopMecanums extends OpMode {
                 -gamepad1.right_stick_x
         );
 
+
+
         // Y starts intake and keeps it running
 //        if (gamepad1.y) {
 //            hogback.setVelocity(HOGBACK_TARGET_VELOCITY);
@@ -191,24 +201,30 @@ public class StarterBotTeleopMecanums extends OpMode {
 
 
 
-        // Right trigger fires 3 shots
+        // Right bumper triggers intake stop
         if (gamepad2.right_bumper) {
             forward = true;
             intake.setPower(0);
 
 
         }
-
+        // left bumper triggers intake forward
         if (gamepad2.left_bumper) {
             if (forward) {
                 forward = false;
                 intake.setPower(INTAKE_FORWARD_VELOCITY);
 
+        // left bumper second click triggers intake backwards
             } else {
                 forward = true;
                 intake.setPower(INTAKE_BACKWARD_VELOCITY);
             }
 
+        }
+
+        // gamepad 2 a button triggers shooter
+        if(gamepad2.a){
+            shooter.setVelocity(SHOOTER_TARGET_VELOCITY);
         }
 
     }

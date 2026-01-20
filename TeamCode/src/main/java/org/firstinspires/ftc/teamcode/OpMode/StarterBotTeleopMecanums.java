@@ -2,6 +2,8 @@ package org.firstinspires.ftc.teamcode.OpMode;
 
 import static com.qualcomm.robotcore.hardware.DcMotor.ZeroPowerBehavior.BRAKE;
 
+import android.util.Size;
+
 import com.qualcomm.hardware.limelightvision.LLResult;
 import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
@@ -11,13 +13,22 @@ import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.IMU;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
+import org.firstinspires.ftc.robotcore.external.Telemetry;
+import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
+import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose3D;
+import org.firstinspires.ftc.vision.VisionPortal;
+import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
+import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
 
 import com.qualcomm.hardware.limelightvision.LLResult;
 import com.qualcomm.hardware.limelightvision.LLResultTypes;
 import com.qualcomm.hardware.limelightvision.LLStatus;
 import com.qualcomm.hardware.limelightvision.Limelight3A;
+
+import java.util.ArrayList;
+import java.util.List;
 
 @TeleOp(name = "StarterBotTeleopMecanums", group = "StarterBot")
 public class StarterBotTeleopMecanums extends OpMode {
@@ -40,6 +51,13 @@ public class StarterBotTeleopMecanums extends OpMode {
     private Limelight3A limelight;
 
     private IMU imu;
+
+    private AprilTagProcessor aprilTagProcessor;
+    private VisionPortal visionPortal;
+
+    private List<AprilTagDetection> detectedTags = new ArrayList<>();
+
+    private Telemetry telemetry;
 
     ElapsedTime feederTimer = new ElapsedTime();
 
@@ -95,6 +113,24 @@ public class StarterBotTeleopMecanums extends OpMode {
         imu.initialize(new IMU.Parameters(orientationOnRobot));
 
 
+        this.telemetry = telemetry;
+
+        aprilTagProcessor = new AprilTagProcessor.Builder()
+                .setDrawTagID(true)
+                .setDrawTagOutline(true)
+                .setDrawAxes(true)
+                .setDrawCubeProjection(true)
+                .setOutputUnits(DistanceUnit.CM, AngleUnit.DEGREES)
+                .build();
+
+        VisionPortal.Builder builder = new VisionPortal.Builder();
+        builder.setCamera(hardwareMap.get(WebcamName.class, "limelight"));
+        builder.setCameraResolution(new Size(640, 480));
+        builder.addProcessor(aprilTagProcessor);
+
+        visionPortal = builder.build();
+
+
 
 
     }
@@ -140,8 +176,6 @@ public class StarterBotTeleopMecanums extends OpMode {
         }
 
         // First, tell Limelight which way your robot is facing
-        // Replace: double robotYaw = imu.getAngularOrientation().firstAngle;
-// With this:
         double robotYaw = imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.DEGREES);
         limelight.updateRobotOrientation(robotYaw);
         if (result != null && result.isValid()) {
@@ -177,11 +211,6 @@ public class StarterBotTeleopMecanums extends OpMode {
 
         }
 
-
-
-
-
-
     }
 
     void mecanumDrive(double forward, double strafe, double rotate) {
@@ -196,8 +225,51 @@ public class StarterBotTeleopMecanums extends OpMode {
         rightBackDrive.setPower((forward + strafe - rotate) / denominator);
     }
 
+    public void update() {
+        detectedTags = aprilTagProcessor.getDetections();
+    }
 
-    // Right bumper jogs feeders for 0.1s
+
+    public List<AprilTagDetection> getDetectedTags() {
+        return detectedTags;
+    }
+
+    public void displayedDetectionTelemetry(AprilTagDetection detectedId){
+        if (detectedId == null) {return;}
+
+        if(detectedId.metadata != null) {
+            telemetry.addLine(String.format("\n==== (ID %d) %s", detectedId.id, detectedId.metadata.name));
+            telemetry.addLine(String.format("XYZ %6.1f %6.1f %6.1f (inch)", detectedId.ftcPose.x, detectedId.ftcPose.y, detectedId.ftcPose.z));
+            telemetry.addLine(String.format("PRY %6.1f %6.1f %6.1f (deg)", detectedId.ftcPose.pitch, detectedId.ftcPose.roll, detectedId.ftcPose.yaw));
+            telemetry.addLine(String.format("RBE %6.1f %6.1f %6.1f (inch, deg, deg)", detectedId.ftcPose.range, detectedId.ftcPose.bearing, detectedId.ftcPose.elevation));
+        }else {
+            telemetry.addLine(String.format("\n====(ID %d) Unknown", detectedId.id));
+            telemetry.addLine(String.format("Center %6.0f %6.0f (pixels)", detectedId.center.x, detectedId.center.y));
+        }
+    }
+
+
+    public AprilTagDetection getTagBySpecificId(int id) {
+        for (AprilTagDetection detection : detectedTags) {
+            if (detection.id == id) {
+                return detection;
+
+            }
+        }
+        return null;
+
+    }
+
+    public void stop() {
+        if (visionPortal != null) {
+            visionPortal.close();
+        }
+    }
+}
+
+
+
+// Right bumper jogs feeders for 0.1s
 //        if (gamepad1.right_bumper && launchState == LaunchState.IDLE) {
 //            feederTimer.reset();
 //            leftFeeder.setPower(BUMPER_FEED_POWER);
@@ -212,4 +284,3 @@ public class StarterBotTeleopMecanums extends OpMode {
 //
 
 
-}

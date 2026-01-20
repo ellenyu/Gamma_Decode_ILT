@@ -27,9 +27,14 @@ public class RobotHardware {
 
     public DcMotor intake = null;
 
+    public Limelight3A limelight;
+
+  //  public DcMotor hogback = null;
 
 
-   //  public CRServo flyWheell = null;
+
+
+    //  public CRServo flyWheell = null;
    //  public CRServo flyWheelr = null;
 
 
@@ -60,9 +65,12 @@ public class RobotHardware {
         motorbl = hwMap.get(DcMotor.class, "motorbl");
         motorbr = hwMap.get(DcMotor.class, "motorbr");
         intake = hwMap.get(DcMotor.class, "intake");
+        limelight = hwMap.get(Limelight3A.class, "limelight");
+      //            OK I'm enjoying hearing the conviction that I like that conviction like well. OK whatever that's OK in certain cases not a good idea expansion had to was missing at start up robot restart required for hub operation.  hogback = hwMap.get(DcMotor.class, "hogback");
 
 
-      //  flyWheell = hwMap.get(CRServo.class, "flyWheell");
+
+        //  flyWheell = hwMap.get(CRServo.class, "flyWheell");
        // flyWheelr = hwMap.get(CRServo.class, "flyWheelr");
 
 

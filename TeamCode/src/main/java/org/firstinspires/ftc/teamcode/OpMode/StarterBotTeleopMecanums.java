@@ -6,6 +6,7 @@ import android.util.Size;
 
 import com.qualcomm.hardware.limelightvision.LLResult;
 import com.qualcomm.hardware.limelightvision.Limelight3A;
+import com.qualcomm.hardware.motors.RevRobotics20HdHexMotor;
 import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
@@ -45,9 +46,13 @@ public class StarterBotTeleopMecanums extends OpMode {
     final double BUMPER_FEED_TIME = 0.55;
     final double BUMPER_FEED_POWER = -0.3;
 
+    final double HOGBACK_TARGET_VELOCITY = 1800;
+    final double HOGBACK_MIN_VELOCITY = 1700;
+
     private DcMotor leftFrontDrive, rightFrontDrive, leftBackDrive, rightBackDrive;
     private DcMotor intake;
 
+    private DcMotor hogback;
     private Limelight3A limelight;
 
     private IMU imu;
@@ -72,6 +77,7 @@ public class StarterBotTeleopMecanums extends OpMode {
         leftBackDrive = hardwareMap.get(DcMotor.class, "motorbl");
         rightBackDrive = hardwareMap.get(DcMotor.class, "motorbr");
         intake = hardwareMap.get(DcMotor.class, "intake");
+        hogback = hardwareMap.get(DcMotor.class, "hogback");
 
 
         leftFrontDrive.setDirection(DcMotor.Direction.FORWARD);
@@ -259,6 +265,7 @@ public class StarterBotTeleopMecanums extends OpMode {
         return null;
 
     }
+
 
     public void stop() {
         if (visionPortal != null) {

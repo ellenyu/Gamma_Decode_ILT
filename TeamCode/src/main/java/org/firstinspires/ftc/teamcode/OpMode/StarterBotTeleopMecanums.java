@@ -241,7 +241,6 @@ public class StarterBotTeleopMecanums extends OpMode {
         detectedTags = aprilTagProcessor.getDetections();
     }
 
-
     public List<AprilTagDetection> getDetectedTags() {
         return detectedTags;
     }

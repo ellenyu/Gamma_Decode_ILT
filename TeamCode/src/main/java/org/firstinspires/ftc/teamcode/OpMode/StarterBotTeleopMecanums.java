@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode.OpMode;
 
+import static com.qualcomm.hardware.bosch.BNO055IMU.SystemStatus.IDLE;
 import static com.qualcomm.robotcore.hardware.DcMotor.ZeroPowerBehavior.BRAKE;
 
 import android.util.Size;
@@ -11,6 +12,7 @@ import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.IMU;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
@@ -52,7 +54,7 @@ public class StarterBotTeleopMecanums extends OpMode {
     private DcMotor leftFrontDrive, rightFrontDrive, leftBackDrive, rightBackDrive;
     private DcMotor intake;
 
-    private DcMotor hogback;
+    private DcMotorEx hogback;
     private Limelight3A limelight;
 
     private IMU imu;
@@ -66,8 +68,16 @@ public class StarterBotTeleopMecanums extends OpMode {
 
     ElapsedTime feederTimer = new ElapsedTime();
 
+    int maxShots = 0;
+
+    private enum LaunchState {
+        IDLE,
+        SPIN_UP,
+        LAUNCH,
+    }
     // 🔹 UPDATED STATE MACHINE
 
+    private LaunchState launchState;
 
     @Override
     public void init() {
@@ -77,7 +87,7 @@ public class StarterBotTeleopMecanums extends OpMode {
         leftBackDrive = hardwareMap.get(DcMotor.class, "motorbl");
         rightBackDrive = hardwareMap.get(DcMotor.class, "motorbr");
         intake = hardwareMap.get(DcMotor.class, "intake");
-        hogback = hardwareMap.get(DcMotor.class, "hogback");
+        hogback = hardwareMap.get(DcMotorEx.class, "hogback");
 
 
         leftFrontDrive.setDirection(DcMotor.Direction.FORWARD);
@@ -111,7 +121,7 @@ public class StarterBotTeleopMecanums extends OpMode {
 
         imu = hardwareMap.get(IMU.class, "imu");
 
-    // Adjust these two settings to match how your Hub is mounted!
+        // Adjust these two settings to match how your Hub is mounted!
         RevHubOrientationOnRobot orientationOnRobot = new RevHubOrientationOnRobot(
                 RevHubOrientationOnRobot.LogoFacingDirection.UP,
                 RevHubOrientationOnRobot.UsbFacingDirection.FORWARD);
@@ -151,16 +161,7 @@ public class StarterBotTeleopMecanums extends OpMode {
                 -gamepad1.right_stick_x
         );
 
-        // Y starts intake and keeps it running
-//        if (gamepad1.y) {
-//            hogback.setVelocity(HOGBACK_TARGET_VELOCITY);
-//        }
-
-        // A stops hogback
-//        if (gamepad1.a) {
-//            hogback.setVelocity(STOP_SPEED);
-//        }
-
+//limelight
         // --- Limelight Logic (Replaces your while loop) ---
         LLResult result = limelight.getLatestResult();
         if (result != null && result.isValid()) {
@@ -193,30 +194,98 @@ public class StarterBotTeleopMecanums extends OpMode {
             }
         }
 
-        // Use getYaw() instead of firstAngle
-
-
-
-        // Right trigger fires 3 shots
-        if (gamepad2.right_bumper) {
-            forward = true;
-            intake.setPower(0);
-
-
+//drive chain
+        if (gamepad2.y) {
+            leftFrontDrive.setZeroPowerBehavior(BRAKE);
+            rightFrontDrive.setZeroPowerBehavior(BRAKE);
+            leftBackDrive.setZeroPowerBehavior(BRAKE);
+            rightBackDrive.setZeroPowerBehavior(BRAKE);
+            hogback.setPower(HOGBACK_TARGET_VELOCITY);
         }
 
-        if (gamepad2.left_bumper) {
-            if (forward) {
-                forward = false;
-                intake.setPower(INTAKE_FORWARD_VELOCITY);
+//hogback
+        if (gamepad2.a) {
+            hogback.setVelocity(STOP_SPEED);
 
-            } else {
+//intake
+            // Right trigger fires 3 shots
+            if (gamepad2.right_bumper) {
                 forward = true;
-                intake.setPower(INTAKE_BACKWARD_VELOCITY);
+                intake.setPower(0);
+
+
             }
 
+            if (gamepad2.left_bumper) {
+                if (forward) {
+                    forward = false;
+                    intake.setPower(INTAKE_FORWARD_VELOCITY);
+
+                } else {
+                    forward = true;
+                    intake.setPower(INTAKE_BACKWARD_VELOCITY);
+                }
+
+            }
+
+//hogback launch state
+            telemetry.addData("State", launchState);
+            telemetry.addData("Hogback Velocity", hogback.getVelocity());
+
+
+        }
+    }
+
+
+    public void update() {
+        detectedTags = aprilTagProcessor.getDetections();
+    }
+
+
+    public List<AprilTagDetection> getDetectedTags() {
+        return detectedTags;
+    }
+
+    public void displayedDetectionTelemetry(AprilTagDetection detectedId) {
+        if (detectedId == null) {
+            return;
         }
 
+        if (detectedId.metadata != null) {
+            telemetry.addLine(String.format("\n==== (ID %d) %s", detectedId.id, detectedId.metadata.name));
+            telemetry.addLine(String.format("XYZ %6.1f %6.1f %6.1f (inch)", detectedId.ftcPose.x, detectedId.ftcPose.y, detectedId.ftcPose.z));
+            telemetry.addLine(String.format("PRY %6.1f %6.1f %6.1f (deg)", detectedId.ftcPose.pitch, detectedId.ftcPose.roll, detectedId.ftcPose.yaw));
+            telemetry.addLine(String.format("RBE %6.1f %6.1f %6.1f (inch, deg, deg)", detectedId.ftcPose.range, detectedId.ftcPose.bearing, detectedId.ftcPose.elevation));
+        } else {
+            telemetry.addLine(String.format("\n====(ID %d) Unknown", detectedId.id));
+            telemetry.addLine(String.format("Center %6.0f %6.0f (pixels)", detectedId.center.x, detectedId.center.y));
+        }
+    }
+
+    // A stops hogback
+
+
+    void launch(boolean shotRequested) {
+        switch (launchState) {
+
+            case IDLE:
+                if (shotRequested) {
+                    launchState = LaunchState.SPIN_UP;
+                }
+                break;
+
+            case SPIN_UP:
+                hogback.setVelocity(HOGBACK_TARGET_VELOCITY);
+                if (hogback.getVelocity() > HOGBACK_MIN_VELOCITY) {
+                    launchState = LaunchState.LAUNCH;
+                }
+                break;
+
+            case LAUNCH:
+                launchState = LaunchState.IDLE;
+                break;
+
+        }
     }
 
     void mecanumDrive(double forward, double strafe, double rotate) {
@@ -229,48 +298,25 @@ public class StarterBotTeleopMecanums extends OpMode {
         rightFrontDrive.setPower((forward - strafe - rotate) / denominator);
         leftBackDrive.setPower((forward - strafe + rotate) / denominator);
         rightBackDrive.setPower((forward + strafe - rotate) / denominator);
-    }
-
-    public void update() {
-        detectedTags = aprilTagProcessor.getDetections();
-    }
 
 
-    public List<AprilTagDetection> getDetectedTags() {
-        return detectedTags;
-    }
-
-    public void displayedDetectionTelemetry(AprilTagDetection detectedId){
-        if (detectedId == null) {return;}
-
-        if(detectedId.metadata != null) {
-            telemetry.addLine(String.format("\n==== (ID %d) %s", detectedId.id, detectedId.metadata.name));
-            telemetry.addLine(String.format("XYZ %6.1f %6.1f %6.1f (inch)", detectedId.ftcPose.x, detectedId.ftcPose.y, detectedId.ftcPose.z));
-            telemetry.addLine(String.format("PRY %6.1f %6.1f %6.1f (deg)", detectedId.ftcPose.pitch, detectedId.ftcPose.roll, detectedId.ftcPose.yaw));
-            telemetry.addLine(String.format("RBE %6.1f %6.1f %6.1f (inch, deg, deg)", detectedId.ftcPose.range, detectedId.ftcPose.bearing, detectedId.ftcPose.elevation));
-        }else {
-            telemetry.addLine(String.format("\n====(ID %d) Unknown", detectedId.id));
-            telemetry.addLine(String.format("Center %6.0f %6.0f (pixels)", detectedId.center.x, detectedId.center.y));
-        }
-    }
-
-
-    public AprilTagDetection getTagBySpecificId(int id) {
-        for (AprilTagDetection detection : detectedTags) {
-            if (detection.id == id) {
-                return detection;
-
-            }
-        }
-        return null;
-
-    }
-
-
-    public void stop() {
-        if (visionPortal != null) {
-            visionPortal.close();
-        }
+//    public AprilTagDetection getTagBySpecificId(int id) {
+//        for (AprilTagDetection detection : detectedTags) {
+//            if (detection.id == id) {
+//                return detection;
+//
+//            }
+//        }
+//        return null;
+//
+//    }
+//
+//
+//    public void stop() {
+//        if (visionPortal != null) {
+//            visionPortal.close();
+//        }
+//    }
     }
 }
 

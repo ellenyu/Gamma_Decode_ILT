@@ -15,7 +15,9 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.IMU;
+import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 import com.qualcomm.robotcore.hardware.Servo;
+import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
 
@@ -50,8 +52,8 @@ public class StarterBotTeleopMecanums extends OpMode {
     final double BUMPER_FEED_TIME = 0.55;
     final double BUMPER_FEED_POWER = -0.3;
 
-    final double HOGBACK_TARGET_VELOCITY = 1800;
-    final double HOGBACK_MIN_VELOCITY = 1700;
+    final double HOGBACK_TARGET_VELOCITY = 1600;
+    final double HOGBACK_MIN_VELOCITY = 1500;
 
     private DcMotor leftFrontDrive, rightFrontDrive, leftBackDrive, rightBackDrive;
     private DcMotor intake;
@@ -102,6 +104,8 @@ public class StarterBotTeleopMecanums extends OpMode {
 
         intake.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         intake.setDirection(DcMotor.Direction.REVERSE);
+
+        hogback.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
 
         pusher0 = hardwareMap.get(CRServo.class, "pusher0");
         pusher1 = hardwareMap.get(CRServo.class, "pusher1");
@@ -239,6 +243,11 @@ public class StarterBotTeleopMecanums extends OpMode {
         if (gamepad2.a) {
             hogback.setVelocity(STOP_SPEED);
         }
+
+        hogback.setPIDFCoefficients(
+                DcMotor.RunMode.RUN_USING_ENCODER,
+                new PIDFCoefficients(300, 0, 0, 10)
+        );
 
 
 //intake
@@ -389,10 +398,9 @@ public class StarterBotTeleopMecanums extends OpMode {
 //            launchState = LaunchState.JOG_FEEDER;
 //        }
 
-    // launch(maxShots > 0);
+// launch(maxShots > 0);
 
 //        telemetry.addData("State", launchState);
 //        telemetry.addData("Hogback Velocity", hogback.getVelocity());
 //
-
 

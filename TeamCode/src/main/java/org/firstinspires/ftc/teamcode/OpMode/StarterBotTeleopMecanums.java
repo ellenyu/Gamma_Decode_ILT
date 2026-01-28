@@ -2,6 +2,7 @@ package org.firstinspires.ftc.teamcode.OpMode;
 
 import static com.qualcomm.hardware.bosch.BNO055IMU.SystemStatus.IDLE;
 import static com.qualcomm.robotcore.hardware.DcMotor.ZeroPowerBehavior.BRAKE;
+import com.qualcomm.robotcore.hardware.CRServo;
 
 import android.util.Size;
 
@@ -14,27 +15,28 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.IMU;
+import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
-import org.firstinspires.ftc.robotcore.external.Telemetry;
-import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
+
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose3D;
+import org.firstinspires.ftc.teamcode.hardware.RobotHardware;
 import org.firstinspires.ftc.vision.VisionPortal;
 import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
 import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
 
-import com.qualcomm.hardware.limelightvision.LLResult;
 import com.qualcomm.hardware.limelightvision.LLResultTypes;
 import com.qualcomm.hardware.limelightvision.LLStatus;
-import com.qualcomm.hardware.limelightvision.Limelight3A;
 
 import java.util.ArrayList;
 import java.util.List;
 
 @TeleOp(name = "StarterBotTeleopMecanums", group = "StarterBot")
 public class StarterBotTeleopMecanums extends OpMode {
+
+    RobotHardware robot = new RobotHardware();
 
     final double FEED_TIME_SECONDS = 0.5;
     final double STOP_SPEED = 0.0;
@@ -54,6 +56,11 @@ public class StarterBotTeleopMecanums extends OpMode {
     private DcMotor leftFrontDrive, rightFrontDrive, leftBackDrive, rightBackDrive;
     private DcMotor intake;
 
+    private CRServo pusher0;
+    private CRServo pusher1;
+
+    private Servo sqbeam;
+
     private DcMotorEx hogback;
     private Limelight3A limelight;
 
@@ -63,8 +70,6 @@ public class StarterBotTeleopMecanums extends OpMode {
     private VisionPortal visionPortal;
 
     private List<AprilTagDetection> detectedTags = new ArrayList<>();
-
-    private Telemetry telemetry;
 
     ElapsedTime feederTimer = new ElapsedTime();
 
@@ -98,6 +103,12 @@ public class StarterBotTeleopMecanums extends OpMode {
         intake.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         intake.setDirection(DcMotor.Direction.REVERSE);
 
+        pusher0 = hardwareMap.get(CRServo.class, "pusher0");
+        pusher1 = hardwareMap.get(CRServo.class, "pusher1");
+        launchState = LaunchState.IDLE;
+        sqbeam = hardwareMap.get(Servo.class, "sqbeam");
+
+
         leftFrontDrive.setZeroPowerBehavior(BRAKE);
         rightFrontDrive.setZeroPowerBehavior(BRAKE);
         leftBackDrive.setZeroPowerBehavior(BRAKE);
@@ -117,8 +128,6 @@ public class StarterBotTeleopMecanums extends OpMode {
         limelight.start();
 
         telemetry.setMsTransmissionInterval(11);
-        telemetry.addData("Status", "Initialized");
-
         imu = hardwareMap.get(IMU.class, "imu");
 
         // Adjust these two settings to match how your Hub is mounted!
@@ -129,7 +138,6 @@ public class StarterBotTeleopMecanums extends OpMode {
         imu.initialize(new IMU.Parameters(orientationOnRobot));
 
 
-        this.telemetry = telemetry;
 
         aprilTagProcessor = new AprilTagProcessor.Builder()
                 .setDrawTagID(true)
@@ -139,12 +147,11 @@ public class StarterBotTeleopMecanums extends OpMode {
                 .setOutputUnits(DistanceUnit.CM, AngleUnit.DEGREES)
                 .build();
 
-        VisionPortal.Builder builder = new VisionPortal.Builder();
-        builder.setCamera(hardwareMap.get(WebcamName.class, "limelight"));
-        builder.setCameraResolution(new Size(640, 480));
-        builder.addProcessor(aprilTagProcessor);
-
-        visionPortal = builder.build();
+//        VisionPortal.Builder builder = new VisionPortal.Builder();
+//        builder.setCameraResolution(new Size(640, 480));
+//        builder.addProcessor(aprilTagProcessor);
+//
+//        visionPortal = builder.build();
 
 // end
 
@@ -155,11 +162,37 @@ public class StarterBotTeleopMecanums extends OpMode {
     @Override
     public void loop() {
 
-        mecanumDrive(
-                gamepad1.left_stick_y,
-                gamepad1.left_stick_x,
-                -gamepad1.right_stick_x
-        );
+        double horizontal = -1.0 * gamepad1.right_stick_x * 0.6;
+        double vertical = gamepad1.right_stick_y * 0.6;
+        double turn = -1.0 * gamepad1.left_stick_x * 0.6;
+
+        //double tx = LimelightHelpers.getTX("limelight");
+        // boolean hasTarget = LimelightHelpers.hasTarget("limelight");
+
+        double flPower = vertical + turn + horizontal;
+        double frPower = vertical - turn - horizontal;
+        double blPower = vertical + turn - horizontal;
+        double brPower = vertical - turn + horizontal;
+        double scaling = Math.max(1.0,
+                Math.max(Math.max(Math.abs(flPower), Math.abs(frPower)),
+                        Math.max(Math.abs(blPower), Math.abs(brPower))));
+        flPower = flPower / scaling;
+        frPower = frPower / scaling;
+        blPower = blPower / scaling;
+        brPower = brPower / scaling;
+
+        if (leftFrontDrive == null || rightFrontDrive == null || leftBackDrive == null || rightBackDrive == null) {
+            telemetry.addData("DriveMotorNull", String.format("lf:%b rf:%b lb:%b rb:%b",
+                    leftFrontDrive == null, rightFrontDrive == null, leftBackDrive == null, rightBackDrive == null));
+            telemetry.update();
+        } else {
+            leftFrontDrive.setPower(flPower);
+            rightFrontDrive.setPower(frPower);
+            leftBackDrive.setPower(blPower);
+            rightBackDrive.setPower(brPower);
+        }
+
+
 
 //limelight
         // --- Limelight Logic (Replaces your while loop) ---
@@ -168,7 +201,7 @@ public class StarterBotTeleopMecanums extends OpMode {
             Pose3D botpose = result.getBotpose();
             telemetry.addData("tx", result.getTx());
             telemetry.addData("ty", result.getTy());
-            telemetry.addData("Botpose", botpose.toString());
+            telemetry.addData("Botpose", botpose !=null ? botpose.toString(): "null");
         }
 
         // Sending numbers to Python
@@ -178,8 +211,7 @@ public class StarterBotTeleopMecanums extends OpMode {
         // Getting numbers from Python
         double[] pythonOutputs = result.getPythonOutput();
         if (pythonOutputs != null && pythonOutputs.length > 0) {
-            double firstOutput = pythonOutputs[0];
-            telemetry.addData("Python output:", firstOutput);
+            telemetry.addData("Python output:", pythonOutputs[0]);
         }
 
         // First, tell Limelight which way your robot is facing
@@ -206,26 +238,64 @@ public class StarterBotTeleopMecanums extends OpMode {
 //hogback
         if (gamepad2.a) {
             hogback.setVelocity(STOP_SPEED);
+        }
+
 
 //intake
-            // Right trigger fires 3 shots
             if (gamepad2.right_bumper) {
+                telemetry.addLine("intake stop");
                 forward = true;
                 intake.setPower(0);
-
 
             }
 
             if (gamepad2.left_bumper) {
+                telemetry.addLine("left bumper is pressed");
                 if (forward) {
+                    telemetry.addData("intake forward:", INTAKE_FORWARD_VELOCITY);
                     forward = false;
                     intake.setPower(INTAKE_FORWARD_VELOCITY);
-
                 } else {
+                    telemetry.addData("intake backward:", INTAKE_BACKWARD_VELOCITY);
                     forward = true;
                     intake.setPower(INTAKE_BACKWARD_VELOCITY);
+
                 }
 
+            }
+
+//pusher servos
+            if(gamepad2.x){
+                telemetry.addLine("x is pressed");
+                if (forward) {
+                    forward = false;
+                    pusher1.setPower(0.4);
+                    pusher0.setPower(0.4);
+                }else {
+                    forward = true;
+                    pusher1.setPower(-0.4);
+                    pusher0.setPower(-0.4);
+                    //telemetry.addLine("backwards");
+                }
+            }
+
+            if(gamepad2.b){
+                telemetry.addLine("b is pressed");
+
+                pusher1.setPower(0.0);
+                pusher0.setPower(0.0);
+                forward = true;
+            }
+
+//elevator
+            if(gamepad2.dpad_up){
+                telemetry.addLine("dpad up is pressed");
+                sqbeam.setPosition(0.2);
+            }
+
+            if(gamepad2.dpad_down){
+                telemetry.addLine("dpad down is pressed");
+                sqbeam.setPosition(0.8);
             }
 
 //hogback launch state
@@ -233,7 +303,7 @@ public class StarterBotTeleopMecanums extends OpMode {
             telemetry.addData("Hogback Velocity", hogback.getVelocity());
 
 
-        }
+
     }
 
 
@@ -287,16 +357,6 @@ public class StarterBotTeleopMecanums extends OpMode {
         }
     }
 
-    void mecanumDrive(double forward, double strafe, double rotate) {
-        double denominator = Math.max(
-                Math.abs(forward) + Math.abs(strafe) + Math.abs(rotate),
-                1
-        );
-
-        leftFrontDrive.setPower((forward + strafe + rotate) / denominator);
-        rightFrontDrive.setPower((forward - strafe - rotate) / denominator);
-        leftBackDrive.setPower((forward - strafe + rotate) / denominator);
-        rightBackDrive.setPower((forward + strafe - rotate) / denominator);
 
 
 //    public AprilTagDetection getTagBySpecificId(int id) {
@@ -316,8 +376,8 @@ public class StarterBotTeleopMecanums extends OpMode {
 //            visionPortal.close();
 //        }
 //    }
-    }
 }
+
 
 
 

@@ -1,16 +1,21 @@
 package org.firstinspires.ftc.teamcode.auto;
 
 import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
+import com.qualcomm.robotcore.hardware.CRServo;
+import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.IMU;
+import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.AngularVelocity;
+import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.YawPitchRollAngles;
+import org.firstinspires.ftc.teamcode.OpMode.OpMode4;
 import org.firstinspires.ftc.vision.VisionPortal;
 import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
 import com.qualcomm.hardware.limelightvision.Limelight3A;
@@ -18,26 +23,52 @@ import com.qualcomm.hardware.limelightvision.Limelight3A;
 
 public abstract class AutoHardware extends LinearOpMode {
 
-    HardwareMap hwMap =  null;
+    HardwareMap hwMap = null;
 
     // motor configurations
-    protected DcMotor         backleftDrive   = null;
+    protected DcMotor backleftDrive = null;
 
-    protected DcMotor         backrightDrive  = null;
-    protected DcMotor         frontleftDrive   = null;
+    protected DcMotor backrightDrive = null;
+    protected DcMotor frontleftDrive = null;
 
-    protected DcMotor         frontrightDrive  = null;
+    protected DcMotor frontrightDrive = null;
+
+
+    protected ElapsedTime runtime = new ElapsedTime();
+
+    ElapsedTime hogbackSpeedChangeTimer = new ElapsedTime();
+
+    static final double INTAKE_POWER_INTAKE = -0.8;
+    static final double INTAKE_POWER_PUSHOUT = 0.8;
+    static final double PUSHER_POWER_INTAKE = -0.8;
+    static final double PUSHER_POWER_PUSHOUT = 0.8;
+    final double HOGBACK_TARGET_INIT_RPM = 3200;    // RPM: Rotations Per Minute
+
+    static final double TRIGGER_SHOOT_TIME = 0.3;
 
 
 
-    protected ElapsedTime     runtime = new ElapsedTime();
+    private CRServo pusher0;
+    private CRServo pusher1;
+
+
+    final double STOP_SPEED = 0.0;
+    static final double TICKS_PER_REVOLUTION = 28.0;
+    final double HOGBACK_TARGET_RANGE = 100;
+
+
+    static final double MAX_TICKS_PER_SEC = 2800.0;
+
+    private double hogback_target_rpm = HOGBACK_TARGET_INIT_RPM;
+    private double hogback_target_ticks = hogback_target_rpm * TICKS_PER_REVOLUTION / 60;
+    private double hogback_target_ticks_low = (hogback_target_rpm - HOGBACK_TARGET_RANGE) * TICKS_PER_REVOLUTION / 60;
 
 
     // For motot encoders
-    protected static final double     COUNTS_PER_MOTOR_REV    = 100 ;    // eg: TETRIX Motor Encoder
-    protected static final double     DRIVE_GEAR_REDUCTION    = 1.0 ;     // No External Gearing.
-    protected static final double     WHEEL_DIAMETER_INCHES   = 4.0 ;     // For figuring circumference
-    protected static final double     COUNTS_PER_INCH         = (COUNTS_PER_MOTOR_REV * DRIVE_GEAR_REDUCTION) /
+    protected static final double COUNTS_PER_MOTOR_REV = 100;    // eg: TETRIX Motor Encoder
+    protected static final double DRIVE_GEAR_REDUCTION = 1.0;     // No External Gearing.
+    protected static final double WHEEL_DIAMETER_INCHES = 4.0;     // For figuring circumference
+    protected static final double COUNTS_PER_INCH = (COUNTS_PER_MOTOR_REV * DRIVE_GEAR_REDUCTION) /
             (WHEEL_DIAMETER_INCHES * 3.1415);
 
     // IMU control
@@ -48,8 +79,28 @@ public abstract class AutoHardware extends LinearOpMode {
     public AngularVelocity angularVelocity0;
     public double yaw0;
 
+    private Servo trigger;
+    static final double TRIGGER_READY = 0.5075;
+    static final double TRIGGER_SHOOT = 0.4825;
+    private DcMotorEx hogback;
+    private Limelight3A limelight;
+
+    ElapsedTime triggerTimer = new ElapsedTime();
+
+    private DcMotor intake;
+    private AprilTagProcessor aprilTagProcessor;
+    private VisionPortal visionPortal;
+
+
+    private OpMode4.LaunchState launchState;
+    private boolean bShootRequested = false;
+
+
     public double ticksPerInch = 31.3;
     public double ticksPerDegree = 12;
+
+    public int numshots = 3;
+
     // Tensor flow/april tag instance variables
     protected static final boolean USE_WEBCAM = true;  // true for webcam, false for phone camera
 
@@ -77,36 +128,36 @@ public abstract class AutoHardware extends LinearOpMode {
     /**
      * The variable to store our instance of the vision portal.
      */
-    protected VisionPortal visionPortal;
-
-    protected AprilTagProcessor aprilTag;
 
     // servo to place pixel on backboard
-    public Servo grabberYtilt = null;
-    public Servo grabberY = null;
-
-    public Servo grabberX = null;
-
-    public Servo grabberXtilt = null;
-
-
-    public void initAll(){
+    public void initAll() {
         initServo();
         initMotor();
         initIMU();
     }
+
     public void initServo() {
 
 
     }
 
 
-    public void initMotor(){
+    public void initMotor() {
         // Initialize the drive system variables.
-        backleftDrive  = hardwareMap.get(DcMotor.class, "motorbl");
+        backleftDrive = hardwareMap.get(DcMotor.class, "motorbl");
         backrightDrive = hardwareMap.get(DcMotor.class, "motorbr");
-        frontleftDrive  = hardwareMap.get(DcMotor.class, "motorfl");
+        frontleftDrive = hardwareMap.get(DcMotor.class, "motorfl");
         frontrightDrive = hardwareMap.get(DcMotor.class, "motorfr");
+        intake = hardwareMap.get(DcMotor.class, "intake");
+        hogback = hardwareMap.get(DcMotorEx.class, "hogback");
+
+        pusher0 = hardwareMap.get(CRServo.class, "pusher0");
+        pusher1 = hardwareMap.get(CRServo.class, "pusher1");
+        launchState = OpMode4.LaunchState.IDLE;
+        trigger = hardwareMap.get(Servo.class, "sqbeam");
+        trigger.setPosition(TRIGGER_READY);
+
+
 
         // To drive forward, most robots need the motor on one side to be reversed, because the axles point in opposite directions.
         // When run, this OpMode should start both motors driving forward. So adjust these two lines based on your first test drive.
@@ -121,6 +172,45 @@ public abstract class AutoHardware extends LinearOpMode {
         //backleftDrive.setDirection(DcMotor.Direction.REVERSE);
         frontrightDrive.setDirection(DcMotor.Direction.REVERSE);
         backrightDrive.setDirection(DcMotor.Direction.REVERSE);
+
+        // Set hogback motor to run with ENCODER and set PID coefficients
+        hogback.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
+        hogback.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        hogback.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        hogback.setPIDFCoefficients(
+                DcMotor.RunMode.RUN_USING_ENCODER,
+                new PIDFCoefficients(300, 0, 0, 10)
+        );
+        hogbackSpeedChangeTimer.reset();
+
+
+        telemetry.addData("Status", "Initialized");
+
+
+        limelight = hardwareMap.get(Limelight3A.class, "limelight");
+        limelight.pipelineSwitch(0);
+        limelight.start();
+
+        telemetry.setMsTransmissionInterval(11);
+        imu = hardwareMap.get(IMU.class, "imu");
+
+        // Adjust these two settings to match how your Hub is mounted!
+        RevHubOrientationOnRobot orientationOnRobot = new RevHubOrientationOnRobot(
+                RevHubOrientationOnRobot.LogoFacingDirection.UP,
+                RevHubOrientationOnRobot.UsbFacingDirection.FORWARD);
+
+        imu.initialize(new IMU.Parameters(orientationOnRobot));
+
+
+
+        aprilTagProcessor = new AprilTagProcessor.Builder()
+                .setDrawTagID(true)
+                .setDrawTagOutline(true)
+                .setDrawAxes(true)
+                .setDrawCubeProjection(true)
+                .setOutputUnits(DistanceUnit.CM, AngleUnit.DEGREES)
+                .build();
+
     }
 
     public void encoderDrive(double speed,
@@ -136,10 +226,10 @@ public abstract class AutoHardware extends LinearOpMode {
         if (opModeIsActive()) {
 
             // Determine new target position, and pass to motor controller
-            newBackLeftTarget = backleftDrive.getCurrentPosition() + (int)(leftInches * COUNTS_PER_INCH);
-            newBackRightTarget = backrightDrive.getCurrentPosition() + (int)(rightInches * COUNTS_PER_INCH);
-            newFrontLeftTarget = frontleftDrive.getCurrentPosition() + (int)(leftInches * COUNTS_PER_INCH);
-            newFrontRightTarget = frontrightDrive.getCurrentPosition() + (int)(rightInches * COUNTS_PER_INCH);
+            newBackLeftTarget = backleftDrive.getCurrentPosition() + (int) (leftInches * COUNTS_PER_INCH);
+            newBackRightTarget = backrightDrive.getCurrentPosition() + (int) (rightInches * COUNTS_PER_INCH);
+            newFrontLeftTarget = frontleftDrive.getCurrentPosition() + (int) (leftInches * COUNTS_PER_INCH);
+            newFrontRightTarget = frontrightDrive.getCurrentPosition() + (int) (rightInches * COUNTS_PER_INCH);
             backleftDrive.setTargetPosition(newBackLeftTarget);
             backrightDrive.setTargetPosition(newBackRightTarget);
             frontleftDrive.setTargetPosition(newFrontLeftTarget);
@@ -169,8 +259,8 @@ public abstract class AutoHardware extends LinearOpMode {
                     (backleftDrive.isBusy() && backrightDrive.isBusy())) {
 
                 // Display it for the driver.
-                telemetry.addData("Running to",  " %7d :%7d", newBackLeftTarget,  newBackRightTarget);
-                telemetry.addData("Currently at",  " at %7d :%7d",
+                telemetry.addData("Running to", " %7d :%7d", newBackLeftTarget, newBackRightTarget);
+                telemetry.addData("Currently at", " at %7d :%7d",
                         backleftDrive.getCurrentPosition(), backrightDrive.getCurrentPosition());
                 telemetry.update();
             }
@@ -209,11 +299,368 @@ public abstract class AutoHardware extends LinearOpMode {
         backleftDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
     }
 
-    public void initAprilTagDetector(){
+    public void initAprilTagDetector() {
 
     }
 
-  /* public void driveToBackBoardByAprilTag(int targetId) {
+    void launch(boolean shotRequested) {
+
+
+        switch (launchState) {
+            case IDLE:
+                if (shotRequested) {
+                    launchState = OpMode4.LaunchState.SPIN_UP;
+                }
+                break;
+            case SPIN_UP:
+                if (shotRequested) {
+                    if (hogback.getVelocity() > hogback_target_ticks_low) {
+                        launchState = OpMode4.LaunchState.LAUNCH;
+                    }
+                } else {
+                    launchState = OpMode4.LaunchState.IDLE;
+                    hogback.setVelocity(STOP_SPEED);
+                }
+                break;
+            case LAUNCH:
+                if (!bShootRequested) {
+                    launchState = OpMode4.LaunchState.IDLE;
+                    hogback.setVelocity(STOP_SPEED);
+                }
+                break;
+        }
+        if (bShootRequested) {
+            hogback.setVelocity(hogback_target_ticks);
+        }
+    }
+
+
+    public void stopRobot() {
+        frontleftDrive.setPower(0);
+        frontrightDrive.setPower(0);
+        backleftDrive.setPower(0);
+        backrightDrive.setPower(0);
+    }
+
+    public void initIMU() {
+        // Initialize IMU in the control hub
+        //                                                                              Yaw: goes counter-clockwise
+        RevHubOrientationOnRobot.LogoFacingDirection logoDirection = RevHubOrientationOnRobot.LogoFacingDirection.LEFT;
+        RevHubOrientationOnRobot.UsbFacingDirection usbDirection = RevHubOrientationOnRobot.UsbFacingDirection.UP;
+        RevHubOrientationOnRobot orientationOnRobot = new RevHubOrientationOnRobot(logoDirection, usbDirection);
+        imu = hardwareMap.get(IMU.class, "imu");
+        imu.initialize(new IMU.Parameters(orientationOnRobot));
+        imu.resetYaw();
+        telemetry.addLine(String.format("INIT Yaw: %.1f\n", getCurrentYaw()));
+        telemetry.update();
+
+        // Retrieve the very initial Rotational Angles and Velocities
+        orientation0 = imu.getRobotYawPitchRollAngles();
+        angularVelocity0 = imu.getRobotAngularVelocity(AngleUnit.DEGREES);
+        imu.resetYaw();
+        yaw0 = getCurrentYaw();
+
+    }
+
+    public double getCurrentYaw() {
+        return imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.DEGREES);
+    }
+
+    public void turnToTargetYaw(double targetYawDegree, double power, long maxAllowedTimeInMills) {
+        long timeBegin, timeCurrent;
+        double currentYaw = getCurrentYaw();
+        ;
+        int ticks, tickDirection;
+        double factor = 1.0;
+
+        double diffYaw = Math.abs(currentYaw - targetYawDegree);
+        telemetry.addLine(String.format("\nCurrentYaw=%.2f\nTargetYaw=%.2f\nYaw0=%.2f",
+                currentYaw, targetYawDegree, yaw0));
+        telemetry.update();
+
+        timeBegin = timeCurrent = System.currentTimeMillis();
+        while (diffYaw > 2
+                && opModeIsActive()
+                && ((timeCurrent - timeBegin) < maxAllowedTimeInMills)) {
+            ticks = (int) (diffYaw * ticksPerDegree);
+            if (ticks > 100)
+                ticks = 100;
+
+            tickDirection = (currentYaw < targetYawDegree) ? -1 : 1;
+            if (ticks < 5)
+                break;
+            if (diffYaw > 5)
+                factor = 1.0;
+            else
+                factor = diffYaw / 5;
+            // factor = 1.0;
+            driveMotors(
+                    (int) (tickDirection * ticks),
+                    (int) (tickDirection * ticks),
+                    -(int) (tickDirection * ticks),
+                    -(int) (tickDirection * ticks),
+                    power * factor, false, 0);
+            sleep(30);
+            currentYaw = getCurrentYaw();
+            timeCurrent = System.currentTimeMillis();
+            diffYaw = Math.abs(currentYaw - targetYawDegree);
+
+            telemetry.addLine(String.format("\nCurrentYaw=%.2f\nTargetYaw=%.2f\nTimeLapsed=%.2f ms",
+                    currentYaw, targetYawDegree, (double) (timeCurrent - timeBegin)));
+            telemetry.update();
+
+        }
+    }
+
+    public void driveMotors(int flTarget, int blTarget, int frTarget, int brTarget,
+                            double power,
+                            boolean bKeepYaw, double targetYaw) {
+        double currentYaw, diffYaw;
+        double powerDeltaPct, powerL, powerR;
+        double leftRatioToCounterCOG = 0.95;
+        int direction;
+
+        frontleftDrive.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        backleftDrive.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        frontrightDrive.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        backrightDrive.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+
+        frontleftDrive.setTargetPosition(flTarget);
+        backleftDrive.setTargetPosition(blTarget);
+        frontrightDrive.setTargetPosition(frTarget);
+        backrightDrive.setTargetPosition(brTarget);
+
+        frontleftDrive.setPower(power * leftRatioToCounterCOG);
+        backleftDrive.setPower(power * leftRatioToCounterCOG);
+        frontrightDrive.setPower(power);
+        backrightDrive.setPower(power);
+
+        frontleftDrive.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+        backleftDrive.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+        frontrightDrive.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+        backrightDrive.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+
+        // Defensive programming.
+        // Use bKeepYaw only when all targets are the same, meaning moving in a straight line
+        if (!((flTarget == blTarget)
+                && (flTarget == frTarget)
+                && (flTarget == brTarget)))
+            bKeepYaw = false;
+        direction = (flTarget > 0) ? 1 : -1;
+        while (opModeIsActive() &&
+                (frontleftDrive.isBusy() &&
+                        backleftDrive.isBusy() &&
+                        frontrightDrive.isBusy() &&
+                        backrightDrive.isBusy())) {
+            if (bKeepYaw) {
+
+                currentYaw = imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.DEGREES);
+                if (Math.abs(currentYaw - targetYaw) > 2.0)
+                    powerDeltaPct = 0.25;
+                else
+                    powerDeltaPct = Math.abs(currentYaw - targetYaw) / 2.0 * 0.25;
+                if (currentYaw < targetYaw) {
+                    powerL = power * (1 - direction * powerDeltaPct);
+                    powerR = power * (1 + direction * powerDeltaPct);
+                } else {
+                    powerL = power * (1 + direction * powerDeltaPct);
+                    powerR = power * (1 - direction * powerDeltaPct);
+                }
+                if (powerL > 1.0)
+                    powerL = 1.0;
+                if (powerR > 1.0)
+                    powerR = 1.0;
+                frontleftDrive.setPower(powerL);
+                backleftDrive.setPower(powerL);
+                frontrightDrive.setPower(powerR);
+                backrightDrive.setPower(powerR);
+            }
+            idle();
+        }
+
+        frontleftDrive.setPower(0);
+        backleftDrive.setPower(0);
+        frontrightDrive.setPower(0);
+        backrightDrive.setPower(0);
+    }
+
+    public void intakeIn() {
+        if (intake != null) intake.setPower(INTAKE_POWER_INTAKE);
+        pusher0Set(PUSHER_POWER_INTAKE);
+        pusher1Set(PUSHER_POWER_INTAKE);
+    }
+
+    // Pushers (CRServo) direct setters (public for fine control)
+    public void pusher0Set(double power) {
+        if (pusher0 != null) pusher0.setPower(power);
+    }
+
+    public void pusher1Set(double power) {
+        if (pusher1 != null) pusher1.setPower(power);
+    }
+
+    // Trigger controls
+    public void triggerReady() {
+        if (trigger != null) trigger.setPosition(TRIGGER_READY);
+    }
+
+    public void triggerShoot(int numshots){
+        for(int count = 0; count<numshots; count++){
+            if (trigger != null){
+                trigger.setPosition(TRIGGER_SHOOT);
+                triggerTimer.reset();
+                count ++;
+
+            }
+            if(triggerTimer.seconds() > TRIGGER_SHOOT_TIME){
+                telemetry.addLine("dpad down is pressed OR timeout");
+                trigger.setPosition(TRIGGER_READY);
+
+            }
+
+        }
+
+
+    }
+
+    public void setTriggerPosition(double position) {
+        if (trigger != null) trigger.setPosition(position);
+    }
+
+    // Hogback / shooter controls
+    public void setHogbackTargetRpmFar() {
+        this.hogback_target_rpm = 3800;
+    }
+
+    public void setHogbackTargetRpmClose() {
+        this.hogback_target_rpm = 2900;
+    }
+
+    public double getHogbackTargetRpm() {
+        return hogback_target_rpm;
+    }
+
+
+}
+       /* private void driveStrafe(int flTarget, int blTarget, int frTarget, int brTarget,
+                             double power,
+                             boolean bKeepYaw, double targetYaw){
+        double currentYaw, diffYaw;
+        double powerDeltaPct, powerL, powerR;
+        int direction;
+
+        frontleftDrive.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        backleftDrive.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        frontrightDrive.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        backrightDrive.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+
+        frontleftDrive.setTargetPosition(flTarget);
+        backleftDrive.setTargetPosition(blTarget);
+        frontrightDrive.setTargetPosition(frTarget);
+        backrightDrive.setTargetPosition(brTarget);
+
+        frontleftDrive.setPower(power);
+        backleftDrive.setPower(power);
+        frontrightDrive.setPower(power);
+        backrightDrive.setPower(power);
+
+        frontleftDrive.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+        backleftDrive.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+        frontrightDrive.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+        backrightDrive.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+
+        // Defensive programming.
+        // Use bKeepYaw only when all targets are the same, meaning moving in a straight line
+        if (! ((flTarget == blTarget)
+                && (flTarget == frTarget)
+                && (flTarget == brTarget)) )
+            bKeepYaw = false;
+        direction = (flTarget > 0) ? 1 : -1;
+        while(opModeIsActive() &&
+                (frontleftDrive.isBusy() &&
+                        backleftDrive.isBusy() &&
+                        frontrightDrive.isBusy() &&
+                        backrightDrive.isBusy())){
+            if (bKeepYaw) {
+
+                currentYaw = imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.DEGREES);
+                if (Math.abs(currentYaw - targetYaw) > 2.0)
+                    powerDeltaPct = 0.25;
+                else
+                    powerDeltaPct = Math.abs(currentYaw - targetYaw) / 2.0 * 0.25;
+                if (currentYaw < targetYaw) {
+                    powerL = power * (1 - direction * powerDeltaPct);
+                    powerR = power * (1 + direction * powerDeltaPct);
+                }
+                else {
+                    powerL = power * (1 + direction * powerDeltaPct);
+                    powerR = power * (1 - direction * powerDeltaPct);
+                }
+                if (powerL > 1.0)
+                    powerL = 1.0;
+                if (powerR > 1.0)
+                    powerR = 1.0;
+                frontleftDrive.setPower(powerL);
+                backleftDrive.setPower(powerL);
+                frontrightDrive.setPower(powerR);
+                backrightDrive.setPower(powerR);
+            }
+            idle();
+        }
+
+        frontleftDrive.setPower(0);
+        backleftDrive.setPower(0);
+        frontrightDrive.setPower(0);
+        backrightDrive.setPower(0);
+    }
+
+*/
+
+    /*   public void turnToTargetYaw2(double targetYawDegree, double power, long maxAllowedTimeInMills){
+        long timeBegin, timeCurrent;
+        double currentYaw = imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.DEGREES);;
+        int ticks, tickDirection;
+        double factor = 1.0;
+
+        double diffYaw = Math.abs(currentYaw - targetYawDegree);
+        telemetry.addLine(String.format("\nCurrentYaw=%.2f\nTargetYaw=%.2f", currentYaw, targetYawDegree));
+        telemetry.update();
+
+        timeBegin = timeCurrent = System.currentTimeMillis();
+        while (diffYaw > 0.5
+                && opModeIsActive()
+                && ((timeCurrent-timeBegin) < maxAllowedTimeInMills)) {
+            ticks = (int) (diffYaw * ticksPerDegree);
+            if (ticks > 130)
+                ticks = 130;
+
+            tickDirection = (currentYaw < targetYawDegree) ? -1 : 1;
+            if (ticks < 1)
+                break;
+            if (diffYaw > 3)
+                factor = 1.0;
+            else
+                factor = diffYaw / 3;
+            driveMotors(
+                    (int)(tickDirection * ticks),
+                    (int)(tickDirection * ticks),
+                    -(int)(tickDirection * ticks*0.5),
+                    -(int)(tickDirection * ticks*0.5),
+                    power * factor, false, 0);
+            currentYaw = imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.DEGREES);
+            timeCurrent = System.currentTimeMillis();
+            diffYaw = Math.abs(currentYaw - targetYawDegree);
+
+            telemetry.addLine(String.format("\nCurrentYaw=%.2f\nTargetYaw=%.2f\nTimeLapsed=%.2f ms",
+                    currentYaw, targetYawDegree, (double)(timeCurrent-timeBegin)));
+            telemetry.update();
+        }
+    }
+
+     */
+
+
+    /* public void driveToBackBoardByAprilTag(int targetId) {
         //adjustment position according to apriltag
         double xPos = 10;
         double yPos = 10;
@@ -330,12 +777,6 @@ public abstract class AutoHardware extends LinearOpMode {
     }
 
   */
-    public void stopRobot(){
-        frontleftDrive.setPower(0);
-        frontrightDrive.setPower(0);
-        backleftDrive.setPower(0);
-        backrightDrive.setPower(0);
-    }
 
    /* public void turn(double powerLeft, double powerRight, long milliseconds){
         frontleftDrive.setPower(powerLeft);
@@ -347,258 +788,5 @@ public abstract class AutoHardware extends LinearOpMode {
     }
     */
 
-    public void initIMU(){
-        // Initialize IMU in the control hub
-        //                                                                              Yaw: goes counter-clockwise
-        RevHubOrientationOnRobot.LogoFacingDirection logoDirection = RevHubOrientationOnRobot.LogoFacingDirection.LEFT;
-        RevHubOrientationOnRobot.UsbFacingDirection  usbDirection  = RevHubOrientationOnRobot.UsbFacingDirection.UP;
-        RevHubOrientationOnRobot orientationOnRobot = new RevHubOrientationOnRobot(logoDirection, usbDirection);
-        imu = hardwareMap.get(IMU.class, "imu");
-        imu.initialize(new IMU.Parameters(orientationOnRobot));
-        imu.resetYaw();
-        telemetry.addLine(String.format("INIT Yaw: %.1f\n", getCurrentYaw()));
-        telemetry.update();
 
-        // Retrieve the very initial Rotational Angles and Velocities
-        orientation0 = imu.getRobotYawPitchRollAngles();
-        angularVelocity0 = imu.getRobotAngularVelocity(AngleUnit.DEGREES);
-        imu.resetYaw();
-        yaw0 = getCurrentYaw();
 
-    }
-
-    public double getCurrentYaw() {
-        return imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.DEGREES);
-    }
-   /* private void driveStrafe(int flTarget, int blTarget, int frTarget, int brTarget,
-                             double power,
-                             boolean bKeepYaw, double targetYaw){
-        double currentYaw, diffYaw;
-        double powerDeltaPct, powerL, powerR;
-        int direction;
-
-        frontleftDrive.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        backleftDrive.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        frontrightDrive.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        backrightDrive.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-
-        frontleftDrive.setTargetPosition(flTarget);
-        backleftDrive.setTargetPosition(blTarget);
-        frontrightDrive.setTargetPosition(frTarget);
-        backrightDrive.setTargetPosition(brTarget);
-
-        frontleftDrive.setPower(power);
-        backleftDrive.setPower(power);
-        frontrightDrive.setPower(power);
-        backrightDrive.setPower(power);
-
-        frontleftDrive.setMode(DcMotor.RunMode.RUN_TO_POSITION);
-        backleftDrive.setMode(DcMotor.RunMode.RUN_TO_POSITION);
-        frontrightDrive.setMode(DcMotor.RunMode.RUN_TO_POSITION);
-        backrightDrive.setMode(DcMotor.RunMode.RUN_TO_POSITION);
-
-        // Defensive programming.
-        // Use bKeepYaw only when all targets are the same, meaning moving in a straight line
-        if (! ((flTarget == blTarget)
-                && (flTarget == frTarget)
-                && (flTarget == brTarget)) )
-            bKeepYaw = false;
-        direction = (flTarget > 0) ? 1 : -1;
-        while(opModeIsActive() &&
-                (frontleftDrive.isBusy() &&
-                        backleftDrive.isBusy() &&
-                        frontrightDrive.isBusy() &&
-                        backrightDrive.isBusy())){
-            if (bKeepYaw) {
-
-                currentYaw = imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.DEGREES);
-                if (Math.abs(currentYaw - targetYaw) > 2.0)
-                    powerDeltaPct = 0.25;
-                else
-                    powerDeltaPct = Math.abs(currentYaw - targetYaw) / 2.0 * 0.25;
-                if (currentYaw < targetYaw) {
-                    powerL = power * (1 - direction * powerDeltaPct);
-                    powerR = power * (1 + direction * powerDeltaPct);
-                }
-                else {
-                    powerL = power * (1 + direction * powerDeltaPct);
-                    powerR = power * (1 - direction * powerDeltaPct);
-                }
-                if (powerL > 1.0)
-                    powerL = 1.0;
-                if (powerR > 1.0)
-                    powerR = 1.0;
-                frontleftDrive.setPower(powerL);
-                backleftDrive.setPower(powerL);
-                frontrightDrive.setPower(powerR);
-                backrightDrive.setPower(powerR);
-            }
-            idle();
-        }
-
-        frontleftDrive.setPower(0);
-        backleftDrive.setPower(0);
-        frontrightDrive.setPower(0);
-        backrightDrive.setPower(0);
-    }
-
-*/
-    public void turnToTargetYaw(double targetYawDegree, double power, long maxAllowedTimeInMills){
-        long timeBegin, timeCurrent;
-        double currentYaw = getCurrentYaw();;
-        int ticks, tickDirection;
-        double factor = 1.0;
-
-        double diffYaw = Math.abs(currentYaw - targetYawDegree);
-        telemetry.addLine(String.format("\nCurrentYaw=%.2f\nTargetYaw=%.2f\nYaw0=%.2f",
-                currentYaw, targetYawDegree, yaw0));
-        telemetry.update();
-
-        timeBegin = timeCurrent = System.currentTimeMillis();
-        while (diffYaw > 2
-                && opModeIsActive()
-                && ((timeCurrent-timeBegin) < maxAllowedTimeInMills)) {
-            ticks = (int) (diffYaw * ticksPerDegree);
-            if (ticks > 100)
-                ticks = 100;
-
-            tickDirection = (currentYaw < targetYawDegree) ? -1 : 1;
-            if (ticks < 5)
-                break;
-            if (diffYaw > 5)
-                factor = 1.0;
-            else
-                factor = diffYaw / 5;
-            // factor = 1.0;
-            driveMotors(
-                    (int)(tickDirection * ticks),
-                    (int)(tickDirection * ticks),
-                    -(int)(tickDirection * ticks),
-                    -(int)(tickDirection * ticks),
-                    power * factor, false, 0);
-            sleep(30);
-            currentYaw = getCurrentYaw();
-            timeCurrent = System.currentTimeMillis();
-            diffYaw = Math.abs(currentYaw - targetYawDegree);
-
-            telemetry.addLine(String.format("\nCurrentYaw=%.2f\nTargetYaw=%.2f\nTimeLapsed=%.2f ms",
-                    currentYaw, targetYawDegree, (double)(timeCurrent-timeBegin)));
-            telemetry.update();
-
-        }
-    }
-
- /*   public void turnToTargetYaw2(double targetYawDegree, double power, long maxAllowedTimeInMills){
-        long timeBegin, timeCurrent;
-        double currentYaw = imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.DEGREES);;
-        int ticks, tickDirection;
-        double factor = 1.0;
-
-        double diffYaw = Math.abs(currentYaw - targetYawDegree);
-        telemetry.addLine(String.format("\nCurrentYaw=%.2f\nTargetYaw=%.2f", currentYaw, targetYawDegree));
-        telemetry.update();
-
-        timeBegin = timeCurrent = System.currentTimeMillis();
-        while (diffYaw > 0.5
-                && opModeIsActive()
-                && ((timeCurrent-timeBegin) < maxAllowedTimeInMills)) {
-            ticks = (int) (diffYaw * ticksPerDegree);
-            if (ticks > 130)
-                ticks = 130;
-
-            tickDirection = (currentYaw < targetYawDegree) ? -1 : 1;
-            if (ticks < 1)
-                break;
-            if (diffYaw > 3)
-                factor = 1.0;
-            else
-                factor = diffYaw / 3;
-            driveMotors(
-                    (int)(tickDirection * ticks),
-                    (int)(tickDirection * ticks),
-                    -(int)(tickDirection * ticks*0.5),
-                    -(int)(tickDirection * ticks*0.5),
-                    power * factor, false, 0);
-            currentYaw = imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.DEGREES);
-            timeCurrent = System.currentTimeMillis();
-            diffYaw = Math.abs(currentYaw - targetYawDegree);
-
-            telemetry.addLine(String.format("\nCurrentYaw=%.2f\nTargetYaw=%.2f\nTimeLapsed=%.2f ms",
-                    currentYaw, targetYawDegree, (double)(timeCurrent-timeBegin)));
-            telemetry.update();
-        }
-    }
-    */
-    public void driveMotors(int flTarget, int blTarget, int frTarget, int brTarget,
-                             double power,
-                             boolean bKeepYaw, double targetYaw){
-        double currentYaw, diffYaw;
-        double powerDeltaPct, powerL, powerR;
-        double leftRatioToCounterCOG = 0.95;
-        int direction;
-
-        frontleftDrive.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        backleftDrive.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        frontrightDrive.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        backrightDrive.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-
-        frontleftDrive.setTargetPosition(flTarget);
-        backleftDrive.setTargetPosition(blTarget);
-        frontrightDrive.setTargetPosition(frTarget);
-        backrightDrive.setTargetPosition(brTarget);
-
-        frontleftDrive.setPower(power * leftRatioToCounterCOG);
-        backleftDrive.setPower(power * leftRatioToCounterCOG);
-        frontrightDrive.setPower(power);
-        backrightDrive.setPower(power);
-
-        frontleftDrive.setMode(DcMotor.RunMode.RUN_TO_POSITION);
-        backleftDrive.setMode(DcMotor.RunMode.RUN_TO_POSITION);
-        frontrightDrive.setMode(DcMotor.RunMode.RUN_TO_POSITION);
-        backrightDrive.setMode(DcMotor.RunMode.RUN_TO_POSITION);
-
-        // Defensive programming.
-        // Use bKeepYaw only when all targets are the same, meaning moving in a straight line
-        if (! ((flTarget == blTarget)
-                && (flTarget == frTarget)
-                && (flTarget == brTarget)) )
-            bKeepYaw = false;
-        direction = (flTarget > 0) ? 1 : -1;
-        while(opModeIsActive() &&
-                (frontleftDrive.isBusy() &&
-                        backleftDrive.isBusy() &&
-                        frontrightDrive.isBusy() &&
-                        backrightDrive.isBusy())){
-            if (bKeepYaw) {
-
-                currentYaw = imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.DEGREES);
-                if (Math.abs(currentYaw - targetYaw) > 2.0)
-                    powerDeltaPct = 0.25;
-                else
-                    powerDeltaPct = Math.abs(currentYaw - targetYaw) / 2.0 * 0.25;
-                if (currentYaw < targetYaw) {
-                    powerL = power * (1 - direction * powerDeltaPct);
-                    powerR = power * (1 + direction * powerDeltaPct);
-                }
-                else {
-                    powerL = power * (1 + direction * powerDeltaPct);
-                    powerR = power * (1 - direction * powerDeltaPct);
-                }
-                if (powerL > 1.0)
-                    powerL = 1.0;
-                if (powerR > 1.0)
-                    powerR = 1.0;
-                frontleftDrive.setPower(powerL);
-                backleftDrive.setPower(powerL);
-                frontrightDrive.setPower(powerR);
-                backrightDrive.setPower(powerR);
-            }
-            idle();
-        }
-
-        frontleftDrive.setPower(0);
-        backleftDrive.setPower(0);
-        frontrightDrive.setPower(0);
-        backrightDrive.setPower(0);
-    }
-}

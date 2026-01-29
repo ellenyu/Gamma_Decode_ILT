@@ -83,7 +83,7 @@ public class OpMode4 extends OpMode {
 
     int maxShots = 0;
 
-    private enum LaunchState {
+    public enum LaunchState {
         IDLE,
         SPIN_UP,
         LAUNCH,

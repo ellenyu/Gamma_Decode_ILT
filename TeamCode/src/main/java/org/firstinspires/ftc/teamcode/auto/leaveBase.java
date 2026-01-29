@@ -27,11 +27,22 @@ public class leaveBase extends AutoHardware  {
         waitForStart();
 
 
-        encoderDrive(0.3,  80,  80, 15);
+        encoderDrive(0.3,  -22,  -22, 15);
+
+        sleep(1000);
+
+        intakeIn();
+        pusher0Set(0.8);
+        pusher1Set(0.8);
+
+        setHogbackTargetRpmFar();
+
+        triggerShoot(3);
+
+
 
         // int forwardTicks = -2000; // strafe right
         // driveMotors(forwardTicks,-forwardTicks,-forwardTicks,forwardTicks, 0.5, false, robot.yaw0);
-        sleep (5000);
 
 
 

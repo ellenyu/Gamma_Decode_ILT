@@ -76,7 +76,7 @@ public class OpMode4 extends OpMode {
     private List<AprilTagDetection> detectedTags = new ArrayList<>();
 
     ElapsedTime triggerTimer = new ElapsedTime();
-    static final double TRIGGER_SHOOT_TIME = 0.5;
+    static final double TRIGGER_SHOOT_TIME = 0.3;
 
     ElapsedTime hogbackSpeedChangeTimer = new ElapsedTime();
     static final double SPEED_CHANGE_TIME = 0.2; // seconds

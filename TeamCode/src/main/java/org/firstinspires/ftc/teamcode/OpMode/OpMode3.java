@@ -2,6 +2,7 @@ package org.firstinspires.ftc.teamcode.OpMode;
 
 import android.annotation.SuppressLint;
 
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
@@ -9,8 +10,8 @@ import org.firstinspires.ftc.teamcode.hardware.RobotHardware;
 
 //
 /** test push **/
+@Disabled
 @TeleOp(name = "OpMode3")
-
 public class OpMode3 extends LinearOpMode {
 
     RobotHardware robot = new RobotHardware();

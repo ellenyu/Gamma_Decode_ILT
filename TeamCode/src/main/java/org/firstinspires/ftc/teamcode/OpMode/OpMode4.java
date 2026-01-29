@@ -274,6 +274,15 @@ public class OpMode4 extends OpMode {
                     hogback_target_rpm * TICKS_PER_REVOLUTION / 60));
             hogback_target_ticks_low = Math.max(0, Math.min(MAX_TICKS_PER_SEC,
                     (hogback_target_rpm - HOGBACK_TARGET_RANGE) * TICKS_PER_REVOLUTION / 60));
+        }else if(gamepad2.dpad_right){
+            if (hogbackSpeedChangeTimer.seconds() > SPEED_CHANGE_TIME) {
+                hogbackSpeedChangeTimer.reset();
+                hogback_target_rpm = 3800;
+            }
+            hogback_target_ticks = Math.max(0, Math.min(MAX_TICKS_PER_SEC,
+                    hogback_target_rpm * TICKS_PER_REVOLUTION / 60));
+            hogback_target_ticks_low = Math.max(0, Math.min(MAX_TICKS_PER_SEC,
+                    (hogback_target_rpm - HOGBACK_TARGET_RANGE) * TICKS_PER_REVOLUTION / 60));
         }
 
         launch(bShootRequested);

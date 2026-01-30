@@ -2,6 +2,8 @@ package org.firstinspires.ftc.teamcode.OpMode;
 
 import static com.qualcomm.hardware.bosch.BNO055IMU.SystemStatus.IDLE;
 import static com.qualcomm.robotcore.hardware.DcMotor.ZeroPowerBehavior.BRAKE;
+
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.hardware.CRServo;
 
 import android.util.Size;
@@ -35,6 +37,7 @@ import com.qualcomm.hardware.limelightvision.LLStatus;
 import java.util.ArrayList;
 import java.util.List;
 
+@Disabled
 @TeleOp(name = "StarterBotTeleopMecanums", group = "StarterBot")
 public class StarterBotTeleopMecanums extends OpMode {
 

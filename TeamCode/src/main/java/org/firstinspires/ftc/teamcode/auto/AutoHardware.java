@@ -15,7 +15,6 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.AngularVelocity;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.YawPitchRollAngles;
-import org.firstinspires.ftc.teamcode.OpMode.OpMode4;
 import org.firstinspires.ftc.vision.VisionPortal;
 import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
 import com.qualcomm.hardware.limelightvision.Limelight3A;
@@ -44,9 +43,9 @@ public abstract class AutoHardware extends LinearOpMode {
     static final double PUSHER_POWER_PUSHOUT = 0.8;
     final double HOGBACK_TARGET_INIT_RPM = 3200;    // RPM: Rotations Per Minute
 
-    static final double TRIGGER_SHOOT_TIME = 0.3;
-
-
+    static final double TRIGGER_SHOOT_TIME = 0.5;
+    static final double TRIGGER_READY_TIME = 5;
+    static final double LAST_TRIGGER_READY_TIME = 2;
 
     private CRServo pusher0;
     private CRServo pusher1;
@@ -54,6 +53,7 @@ public abstract class AutoHardware extends LinearOpMode {
 
     final double STOP_SPEED = 0.0;
     static final double TICKS_PER_REVOLUTION = 28.0;
+
     final double HOGBACK_TARGET_RANGE = 100;
 
 
@@ -65,10 +65,10 @@ public abstract class AutoHardware extends LinearOpMode {
 
 
     // For motot encoders
-    protected static final double COUNTS_PER_MOTOR_REV = 100;    // eg: TETRIX Motor Encoder
+    protected static final double TICKS_DRIVE_PER_REVOLUTION = 537.7;    // GoBilda 312 rpm Yellow Jacket Motor
     protected static final double DRIVE_GEAR_REDUCTION = 1.0;     // No External Gearing.
     protected static final double WHEEL_DIAMETER_INCHES = 4.0;     // For figuring circumference
-    protected static final double COUNTS_PER_INCH = (COUNTS_PER_MOTOR_REV * DRIVE_GEAR_REDUCTION) /
+    protected static final double TICKS_PER_INCH = (TICKS_DRIVE_PER_REVOLUTION * DRIVE_GEAR_REDUCTION) /
             (WHEEL_DIAMETER_INCHES * 3.1415);
 
     // IMU control
@@ -80,26 +80,34 @@ public abstract class AutoHardware extends LinearOpMode {
     public double yaw0;
 
     private Servo trigger;
-    static final double TRIGGER_READY = 0.5075;
-    static final double TRIGGER_SHOOT = 0.4825;
     private DcMotorEx hogback;
     private Limelight3A limelight;
-
-    ElapsedTime triggerTimer = new ElapsedTime();
 
     private DcMotor intake;
     private AprilTagProcessor aprilTagProcessor;
     private VisionPortal visionPortal;
 
 
-    private OpMode4.LaunchState launchState;
+    static final double TRIGGER_READY = 0.5150;
+    static final double TRIGGER_SHOOT = 0.4825;
+    private LAUNCH_STATES launchState;
     private boolean bShootRequested = false;
+    private int countShots = 0;
 
+    ElapsedTime triggerShootTimer = new ElapsedTime();
+    ElapsedTime triggerReadyTimer = new ElapsedTime();
+
+    public enum LAUNCH_STATES {
+        IDLE,
+        SPIN_UP,
+        LAUNCH,
+        LAUNCHING,  // trigger SHOOT state
+        LAUNCHED,   // trigger back to READY
+    }
+    // 🔹 UPDATED STATE MACHINE
 
     public double ticksPerInch = 31.3;
     public double ticksPerDegree = 12;
-
-    public int numshots = 3;
 
     // Tensor flow/april tag instance variables
     protected static final boolean USE_WEBCAM = true;  // true for webcam, false for phone camera
@@ -149,29 +157,20 @@ public abstract class AutoHardware extends LinearOpMode {
         frontleftDrive = hardwareMap.get(DcMotor.class, "motorfl");
         frontrightDrive = hardwareMap.get(DcMotor.class, "motorfr");
         intake = hardwareMap.get(DcMotor.class, "intake");
-        hogback = hardwareMap.get(DcMotorEx.class, "hogback");
-
         pusher0 = hardwareMap.get(CRServo.class, "pusher0");
         pusher1 = hardwareMap.get(CRServo.class, "pusher1");
-        launchState = OpMode4.LaunchState.IDLE;
         trigger = hardwareMap.get(Servo.class, "sqbeam");
-        trigger.setPosition(TRIGGER_READY);
-
-
-
-        // To drive forward, most robots need the motor on one side to be reversed, because the axles point in opposite directions.
-        // When run, this OpMode should start both motors driving forward. So adjust these two lines based on your first test drive.
-        // Note: The settings here assume direct drive on left and right wheels.  Gear Reduction or 90 Deg drives may require direction flips
+        hogback = hardwareMap.get(DcMotorEx.class, "hogback");
 
         frontrightDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         frontleftDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         backrightDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         backleftDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        frontleftDrive.setDirection(DcMotor.Direction.REVERSE);
+        backleftDrive.setDirection(DcMotor.Direction.REVERSE);
 
-        //backrightDrive.setDirection(DcMotor.Direction.REVERSE);
-        //backleftDrive.setDirection(DcMotor.Direction.REVERSE);
-        frontrightDrive.setDirection(DcMotor.Direction.REVERSE);
-        backrightDrive.setDirection(DcMotor.Direction.REVERSE);
+        intake.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        intake.setDirection(DcMotor.Direction.REVERSE);
 
         // Set hogback motor to run with ENCODER and set PID coefficients
         hogback.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
@@ -182,27 +181,21 @@ public abstract class AutoHardware extends LinearOpMode {
                 new PIDFCoefficients(300, 0, 0, 10)
         );
         hogbackSpeedChangeTimer.reset();
-
+        triggerShootTimer.reset();
+        triggerReadyTimer.reset();
+        trigger.setPosition(TRIGGER_READY);
+        launchState = LAUNCH_STATES.IDLE;
 
         telemetry.addData("Status", "Initialized");
 
-
+        // LL camera initialization
         limelight = hardwareMap.get(Limelight3A.class, "limelight");
         limelight.pipelineSwitch(0);
         limelight.start();
 
         telemetry.setMsTransmissionInterval(11);
-        imu = hardwareMap.get(IMU.class, "imu");
 
-        // Adjust these two settings to match how your Hub is mounted!
-        RevHubOrientationOnRobot orientationOnRobot = new RevHubOrientationOnRobot(
-                RevHubOrientationOnRobot.LogoFacingDirection.UP,
-                RevHubOrientationOnRobot.UsbFacingDirection.FORWARD);
-
-        imu.initialize(new IMU.Parameters(orientationOnRobot));
-
-
-
+        // aprilTag processor
         aprilTagProcessor = new AprilTagProcessor.Builder()
                 .setDrawTagID(true)
                 .setDrawTagOutline(true)
@@ -226,10 +219,10 @@ public abstract class AutoHardware extends LinearOpMode {
         if (opModeIsActive()) {
 
             // Determine new target position, and pass to motor controller
-            newBackLeftTarget = backleftDrive.getCurrentPosition() + (int) (leftInches * COUNTS_PER_INCH);
-            newBackRightTarget = backrightDrive.getCurrentPosition() + (int) (rightInches * COUNTS_PER_INCH);
-            newFrontLeftTarget = frontleftDrive.getCurrentPosition() + (int) (leftInches * COUNTS_PER_INCH);
-            newFrontRightTarget = frontrightDrive.getCurrentPosition() + (int) (rightInches * COUNTS_PER_INCH);
+            newFrontLeftTarget = frontleftDrive.getCurrentPosition() + (int) (leftInches * TICKS_PER_INCH);
+            newBackLeftTarget = backleftDrive.getCurrentPosition() + (int) (leftInches * TICKS_PER_INCH);
+            newFrontRightTarget = frontrightDrive.getCurrentPosition() + (int) (rightInches * TICKS_PER_INCH);
+            newBackRightTarget = backrightDrive.getCurrentPosition() + (int) (rightInches * TICKS_PER_INCH);
             backleftDrive.setTargetPosition(newBackLeftTarget);
             backrightDrive.setTargetPosition(newBackRightTarget);
             frontleftDrive.setTargetPosition(newFrontLeftTarget);
@@ -271,14 +264,11 @@ public abstract class AutoHardware extends LinearOpMode {
             frontleftDrive.setPower(0);
             frontrightDrive.setPower(0);
 
-
             // Turn off RUN_TO_POSITION
             backleftDrive.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
             backrightDrive.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
             frontleftDrive.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
             frontrightDrive.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-
-            sleep(250);   // optional pause after each move.
         }
     }
 
@@ -303,38 +293,6 @@ public abstract class AutoHardware extends LinearOpMode {
 
     }
 
-    void launch(boolean shotRequested) {
-
-
-        switch (launchState) {
-            case IDLE:
-                if (shotRequested) {
-                    launchState = OpMode4.LaunchState.SPIN_UP;
-                }
-                break;
-            case SPIN_UP:
-                if (shotRequested) {
-                    if (hogback.getVelocity() > hogback_target_ticks_low) {
-                        launchState = OpMode4.LaunchState.LAUNCH;
-                    }
-                } else {
-                    launchState = OpMode4.LaunchState.IDLE;
-                    hogback.setVelocity(STOP_SPEED);
-                }
-                break;
-            case LAUNCH:
-                if (!bShootRequested) {
-                    launchState = OpMode4.LaunchState.IDLE;
-                    hogback.setVelocity(STOP_SPEED);
-                }
-                break;
-        }
-        if (bShootRequested) {
-            hogback.setVelocity(hogback_target_ticks);
-        }
-    }
-
-
     public void stopRobot() {
         frontleftDrive.setPower(0);
         frontrightDrive.setPower(0);
@@ -345,7 +303,7 @@ public abstract class AutoHardware extends LinearOpMode {
     public void initIMU() {
         // Initialize IMU in the control hub
         //                                                                              Yaw: goes counter-clockwise
-        RevHubOrientationOnRobot.LogoFacingDirection logoDirection = RevHubOrientationOnRobot.LogoFacingDirection.LEFT;
+        RevHubOrientationOnRobot.LogoFacingDirection logoDirection = RevHubOrientationOnRobot.LogoFacingDirection.RIGHT;
         RevHubOrientationOnRobot.UsbFacingDirection usbDirection = RevHubOrientationOnRobot.UsbFacingDirection.UP;
         RevHubOrientationOnRobot orientationOnRobot = new RevHubOrientationOnRobot(logoDirection, usbDirection);
         imu = hardwareMap.get(IMU.class, "imu");
@@ -417,7 +375,6 @@ public abstract class AutoHardware extends LinearOpMode {
                             boolean bKeepYaw, double targetYaw) {
         double currentYaw, diffYaw;
         double powerDeltaPct, powerL, powerR;
-        double leftRatioToCounterCOG = 0.95;
         int direction;
 
         frontleftDrive.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
@@ -430,8 +387,8 @@ public abstract class AutoHardware extends LinearOpMode {
         frontrightDrive.setTargetPosition(frTarget);
         backrightDrive.setTargetPosition(brTarget);
 
-        frontleftDrive.setPower(power * leftRatioToCounterCOG);
-        backleftDrive.setPower(power * leftRatioToCounterCOG);
+        frontleftDrive.setPower(power);
+        backleftDrive.setPower(power);
         frontrightDrive.setPower(power);
         backrightDrive.setPower(power);
 
@@ -484,11 +441,17 @@ public abstract class AutoHardware extends LinearOpMode {
         backrightDrive.setPower(0);
     }
 
-    public void intakeIn() {
-        if (intake != null) intake.setPower(INTAKE_POWER_INTAKE);
-        pusher0Set(PUSHER_POWER_INTAKE);
-        pusher1Set(PUSHER_POWER_INTAKE);
+    public void turnOnIntakeSubsystem() {
+        intake.setPower(INTAKE_POWER_INTAKE);
+        pusher0.setPower(PUSHER_POWER_INTAKE);
+        pusher1.setPower(PUSHER_POWER_INTAKE);
     }
+    public void turnOffIntakeSubsystem() {
+        intake.setPower(0);
+        pusher0.setPower(0);
+        pusher1.setPower(0);
+    }
+
 
     // Pushers (CRServo) direct setters (public for fine control)
     public void pusher0Set(double power) {
@@ -504,23 +467,73 @@ public abstract class AutoHardware extends LinearOpMode {
         if (trigger != null) trigger.setPosition(TRIGGER_READY);
     }
 
-    public void triggerShoot(int numshots){
-        for(int count = 0; count<numshots; count++){
-            if (trigger != null){
+    void launch(int numShots) {
+        switch (launchState) {
+            case IDLE:
+                if (bShootRequested) {
+                    launchState = LAUNCH_STATES.SPIN_UP;
+                }
+                break;
+            case SPIN_UP:
+                if (bShootRequested) {
+                    if (hogback.getVelocity() > hogback_target_ticks_low) {
+                        launchState = LAUNCH_STATES.LAUNCH;
+                    }
+                }
+                break;
+            case LAUNCH:
+                launchState = LAUNCH_STATES.LAUNCHING;
                 trigger.setPosition(TRIGGER_SHOOT);
-                triggerTimer.reset();
-                count ++;
-
-            }
-            if(triggerTimer.seconds() > TRIGGER_SHOOT_TIME){
-                telemetry.addLine("dpad down is pressed OR timeout");
-                trigger.setPosition(TRIGGER_READY);
-
-            }
-
+                triggerShootTimer.reset();
+                break;
+            case LAUNCHING:
+                if (triggerShootTimer.seconds() > TRIGGER_SHOOT_TIME) {
+                    launchState = LAUNCH_STATES.LAUNCHED;
+                    trigger.setPosition(TRIGGER_READY);
+                    triggerReadyTimer.reset();
+                }
+                break;
+            case LAUNCHED:
+                if (triggerReadyTimer.seconds() > TRIGGER_READY_TIME
+                        || ((countShots == (numShots - 1))
+                            && triggerReadyTimer.seconds() > LAST_TRIGGER_READY_TIME)) {
+                    countShots ++;
+                    triggerReadyTimer.reset();
+                    if (countShots >= numShots) {
+                        // Finished all shots. Stop shooting...
+                        bShootRequested = false;
+                        launchState = LAUNCH_STATES.IDLE;
+                    } else {
+                        launchState = LAUNCH_STATES.LAUNCH;
+                    }
+                }
+                break;
         }
+        if (bShootRequested) {
+            hogback.setVelocity(hogback_target_ticks);
+        }
+        else {
+            launchState = LAUNCH_STATES.IDLE;
+            hogback.setVelocity(STOP_SPEED);
+        }
+        telemetry.addData("State", launchState);
+        telemetry.addData("Hogback Velocity Target (RPM)", hogback_target_rpm);
+        telemetry.addData("Hogback Velocity Actual (RPM)",
+                hogback.getVelocity() / TICKS_PER_REVOLUTION * 60);
+        telemetry.addData("Shot", countShots + " of " + numShots);
+        telemetry.addData("TriggerShootTimer", triggerShootTimer.seconds());
+        telemetry.addData("TriggerReadyTimer", triggerReadyTimer.seconds());
+        telemetry.update();
+    }
 
-
+    public void triggerShoot(int numShots) {
+        bShootRequested = true;
+        countShots = 0;
+        while (opModeIsActive()) {
+            launch(numShots);
+            if (!bShootRequested)
+                break;
+        }
     }
 
     public void setTriggerPosition(double position) {
@@ -528,8 +541,12 @@ public abstract class AutoHardware extends LinearOpMode {
     }
 
     // Hogback / shooter controls
-    public void setHogbackTargetRpmFar() {
-        this.hogback_target_rpm = 3800;
+    public void setHogbackTargetRpm(double target_rpm) {
+        hogback_target_rpm = target_rpm;
+        hogback_target_ticks = Math.max(0, Math.min(MAX_TICKS_PER_SEC,
+                hogback_target_rpm * TICKS_PER_REVOLUTION / 60));
+        hogback_target_ticks_low = Math.max(0, Math.min(MAX_TICKS_PER_SEC,
+                (hogback_target_rpm - HOGBACK_TARGET_RANGE) * TICKS_PER_REVOLUTION / 60));
     }
 
     public void setHogbackTargetRpmClose() {

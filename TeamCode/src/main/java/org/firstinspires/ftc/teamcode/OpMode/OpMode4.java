@@ -63,7 +63,7 @@ public class OpMode4 extends OpMode {
     private CRServo pusher1;
 
     private Servo trigger;
-    static final double TRIGGER_READY = 0.5075;
+    static final double TRIGGER_READY = 0.5150;
     static final double TRIGGER_SHOOT = 0.4825;
     private DcMotorEx hogback;
     private Limelight3A limelight;
@@ -87,6 +87,8 @@ public class OpMode4 extends OpMode {
         IDLE,
         SPIN_UP,
         LAUNCH,
+        LAUNCHING,  // trigger SHOOT state
+        LAUNCHED,   // trigger back to READY
     }
     // 🔹 UPDATED STATE MACHINE
 
@@ -268,7 +270,7 @@ public class OpMode4 extends OpMode {
             // telemetry.addLine("b is pressed");
             if (hogbackSpeedChangeTimer.seconds() > SPEED_CHANGE_TIME) {
                 hogbackSpeedChangeTimer.reset();
-            hogback_target_rpm -= 100;
+                hogback_target_rpm -= 100;
             }
             hogback_target_ticks = Math.max(0, Math.min(MAX_TICKS_PER_SEC,
                     hogback_target_rpm * TICKS_PER_REVOLUTION / 60));

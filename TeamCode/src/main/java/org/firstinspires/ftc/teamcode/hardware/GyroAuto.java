@@ -28,7 +28,8 @@ public class GyroAuto extends AutoHardware {
 
         while (opModeIsActive()){
             // telemetry prints out information on drivers station
-            telemetry.addData("Orientation: ", getCurrentYaw());
+            telemetry.addData("Current Yaw: ", getCurrentYaw());
+            telemetry.addData("TicksPerInc", TICKS_PER_INCH);
             telemetry.update();
        }
 

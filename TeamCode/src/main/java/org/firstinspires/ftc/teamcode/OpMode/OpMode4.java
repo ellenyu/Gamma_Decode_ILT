@@ -95,6 +95,10 @@ public class OpMode4 extends OpMode {
     private LaunchState launchState;
     private boolean bShootRequested = false;
 
+//    private double deadzone(double value, double threshold) {
+//        return Math.abs(value) < threshold ? 0.0 : value;
+//    }
+
     @Override
     public void init() {
 
@@ -187,8 +191,11 @@ public class OpMode4 extends OpMode {
         double vertical = gamepad1.right_stick_y * 0.6;
         double turn = -1.0 * gamepad1.left_stick_x * 0.6;
 
-        //double tx = LimelightHelpers.getTX("limelight");
-        // boolean hasTarget = LimelightHelpers.hasTarget("limelight");
+//          double horizontal = deadzone(-gamepad1.right_stick_x, 0.05) * 0.6;
+//          double vertical = deadzone(-gamepad1.right_stick_x, 0.05) * 0.6;
+//          double turn = deadzone(-gamepad1.right_stick_x, 0.05) * 0.6;
+//        double tx = LimelightHelpers.getTX("limelight");
+//         boolean hasTarget = LimelightHelpers.hasTarget("limelight");
 
         double flPower = vertical + turn + horizontal;
         double frPower = vertical - turn - horizontal;
@@ -280,6 +287,24 @@ public class OpMode4 extends OpMode {
             if (hogbackSpeedChangeTimer.seconds() > SPEED_CHANGE_TIME) {
                 hogbackSpeedChangeTimer.reset();
                 hogback_target_rpm = 3800;
+            }
+            hogback_target_ticks = Math.max(0, Math.min(MAX_TICKS_PER_SEC,
+                    hogback_target_rpm * TICKS_PER_REVOLUTION / 60));
+            hogback_target_ticks_low = Math.max(0, Math.min(MAX_TICKS_PER_SEC,
+                    (hogback_target_rpm - HOGBACK_TARGET_RANGE) * TICKS_PER_REVOLUTION / 60));
+        }else if (gamepad2.dpad_left){
+            if (hogbackSpeedChangeTimer.seconds() > SPEED_CHANGE_TIME) {
+                hogbackSpeedChangeTimer.reset();
+                hogback_target_rpm = 3200;
+            }
+            hogback_target_ticks = Math.max(0, Math.min(MAX_TICKS_PER_SEC,
+                    hogback_target_rpm * TICKS_PER_REVOLUTION / 60));
+            hogback_target_ticks_low = Math.max(0, Math.min(MAX_TICKS_PER_SEC,
+                    (hogback_target_rpm - HOGBACK_TARGET_RANGE) * TICKS_PER_REVOLUTION / 60));
+        }else if(gamepad2.right_trigger > 0.5){
+            if (hogbackSpeedChangeTimer.seconds() > SPEED_CHANGE_TIME) {
+                hogbackSpeedChangeTimer.reset();
+                hogback_target_rpm = 2800;
             }
             hogback_target_ticks = Math.max(0, Math.min(MAX_TICKS_PER_SEC,
                     hogback_target_rpm * TICKS_PER_REVOLUTION / 60));
